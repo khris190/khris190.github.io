@@ -1,6 +1,6 @@
-<!doctype html>
-<html lang="en">
-<head>
+<!doctype html> 
+<html lang="en"> 
+<head> 
     <meta charset="UTF-8" />
     <title>Making your first Phaser 3 Game - Part 10</title>
     <script src="js/phaser.js"></script>
@@ -17,7 +17,7 @@
 var config = {
     type: Phaser.AUTO,
     width: 800,
-    height: 800,
+    height: 600,
     physics: {
         default: 'arcade',
         arcade: {
@@ -39,16 +39,15 @@ var cursors;
 var score = 0;
 var gameOver = false;
 var scoreText;
-var dragX = .5;
+var dragX = 1;
 var speedX = 10;
+
 var game = new Phaser.Game(config);
 
 function preload ()
 {
     this.load.image('sky', 'assets/sky.png');
     this.load.image('ground', 'assets/platform.png');
-    this.load.image('star', 'assets/star.png');
-    this.load.image('bomb', 'assets/bomb.png');
     this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 32, frameHeight: 48 });
 }
 
@@ -58,7 +57,7 @@ function create ()
     this.cameras.main.centerOn(400, 0);
 
     //  A simple background for our game
-    this.add.image(400, 400, 'sky');
+    this.add.image(400, 300, 'sky');
 
     //  The platforms group contains the ground and the 2 ledges we can jump on
     platforms = this.physics.add.staticGroup();
@@ -72,7 +71,6 @@ function create ()
     platforms.create(50, 250, 'ground');
     platforms.create(750, 220, 'ground');
 
-
     // The player and its settings
     player = this.physics.add.sprite(100, 450, 'dude');
 
@@ -80,12 +78,7 @@ function create ()
     player.setBounce(0);
     player.setCollideWorldBounds(true);
 
-    player.collideRight = false;
-    player.collideLeft = false;
-    player.collideUp = false;
-    player.collideDown = false;
-
-    player.setMaxVelocity(200,100000);
+    player.setMaxVelocity(200,10000);
 
     player.velocityX = 0;
     player.velocityY = 0;
@@ -114,8 +107,9 @@ function create ()
     //  Input Events
     cursors = this.input.keyboard.createCursorKeys();
 
+
     //  The score
-    scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000000' });
+    scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
 
     //  Collide the player and the stars with the platforms
     this.physics.add.collider(player, platforms);
@@ -124,9 +118,8 @@ function create ()
 
 function update ()
 {
-    player.setFriction(1, 1);
-
-    if (gameOver) {
+    if (gameOver)
+    {
         return;
     }
 
@@ -160,15 +153,10 @@ function update ()
         player.setVelocityY(-330);
     }
 
-    if (player.velocityY < 0) {
-        player.body.enable = false;
-    }
-    else{
-        player = true;
-    }
 
     console.log(player.collideRight);
-    if (player.collideRight || player.collideLeft){
+    if (player.collideRight || player.collideLeft)
+    {
         player.setVelocityX(0);
     }
 
@@ -181,11 +169,9 @@ function update ()
 
 
 
-
-
-
     this.cameras.main.centerOn(400, player.y);
 }
+
 </script>
 
 </body>

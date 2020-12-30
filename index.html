@@ -32,53 +32,110 @@ var config = {
     }
 };
 
+//region vars
+
 var player;
 var stars;
 var platforms;
+var wallL;
+var wallR;
 var cursors;
 var score = 0;
 var gameOver = false;
 var scoreText;
-var dragX = 1;
-var speedX = 10;
+var groundDragX = 9;
+var airDragX = 1;
+var speedX = 6;
+var airspeedX = 2;
+var maxVelocityX = 800;
+var baseJumpVelocity = -330;
 
+var tileBackground;
 var game = new Phaser.Game(config);
 
-function preload ()
-{
-    this.load.image('sky', 'assets/sky.png');
-    this.load.image('ground', 'assets/platform.png');
-    this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 32, frameHeight: 48 });
+//endregion
+
+function preload () {
+    this.load.image('sky', 'assets/background.png');
+    this.load.image('wallL', 'assets/left_wall.png');
+    this.load.image('wallR', 'assets/right_wall.png');
+    this.load.image('stand', 'assets/stand.png');
+    this.load.image('ground', 'assets/ground.png');
+    this.load.image('first_stand', 'assets/first_stand.png');
+    this.load.image('iced', 'assets/iced.png');
+    this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 128, frameHeight: 190 });
 }
 
-function create ()
-{
+function create () {
+    //region camera
+
     //this.cameras.main.setBounds(0, 0, 1024, 2048);
     this.cameras.main.centerOn(400, 0);
 
-    //  A simple background for our game
-    this.add.image(400, 300, 'sky');
+    //endregion
+
+    this.tileBackground = this.add.tileSprite(400, 400, 800, 600, 'sky');
+    //region platforms
 
     //  The platforms group contains the ground and the 2 ledges we can jump on
     platforms = this.physics.add.staticGroup();
 
     //  Here we create the ground.
     //  Scale it to fit the width of the game (the original sprite is 400x32 in size)
-    platforms.create(400, 568, 'ground').setScale(2).refreshBody();
+    platforms.create(400, 568, 'first_stand').setScale(2).refreshBody();
+
+    //endregion
+
+    //region walls
+
+    // create walls
+    this.wallL = this.add.tileSprite(0,400, 80, 800, 'wallL');
+    this.wallR = this.add.tileSprite(800,400, 80, 800, 'wallR');
+    this.physics.add.existing(this.wallR, true);
+    this.physics.add.existing(this.wallL, true);
+
+
+    // walls.create(800,400, 'wallR');
+
+    //endregion
+
+    //region platforms
 
     //  Now let's create some ledges
-    platforms.create(600, 400, 'ground');
-    platforms.create(50, 250, 'ground');
-    platforms.create(750, 220, 'ground');
+    let y = 450
+    for (var i = 0; i <=100; i++){
+        let x = Math.floor(Math.random()*380)+230
+        let scale = Math.random() * (1-0.4) + 0.4;
+        stand = platforms.create(x,y,'stand').setScale(scale,1).refreshBody();
+        y = y - 170
+    }
+    for (var i = 0; i <=900; i++){
+        let x = Math.floor(Math.random()*380)+230
+        let scale = Math.random() * (1-0.4) + 0.4;
+        stand = platforms.create(x,y,'iced').setScale(scale,1).refreshBody();
+        y = y - 170
+    }
+
+    platforms.children.iterate(function (child) {
+        child.body.checkCollision.up = true;
+        child.body.checkCollision.down = false;
+        child.body.checkCollision.left = false;
+        child.body.checkCollision.right = false;
+    });
+
+
+    //endregion
+
+    //region player
 
     // The player and its settings
-    player = this.physics.add.sprite(100, 450, 'dude');
+    player = this.physics.add.sprite(100, 450, 'dude').setScale(.5);
 
     //  Player physics properties. Give the little guy a slight bounce.
     player.setBounce(0);
-    player.setCollideWorldBounds(true);
+    player.setCollideWorldBounds(false);
 
-    player.setMaxVelocity(200,10000);
+    player.body.setSize(55,105);
 
     player.velocityX = 0;
     player.velocityY = 0;
@@ -103,73 +160,130 @@ function create ()
         frameRate: 10,
         repeat: -1
     });
+    //endregion
 
     //  Input Events
     cursors = this.input.keyboard.createCursorKeys();
 
-
     //  The score
     scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
 
+    //region physics
+
     //  Collide the player and the stars with the platforms
     this.physics.add.collider(player, platforms);
+    this.physics.add.collider(player, this.wallR);
+    this.physics.add.collider(player, this.wallL);
+
+    //endregion
 
 }
 
 function update ()
 {
-    if (gameOver)
-    {
+    if (gameOver) {
         return;
     }
 
-    if (cursors.left.isDown) {
+    //region movement L&R
 
-        player.setVelocityX(player.velocityX -= speedX - dragX);
-        player.anims.play('left', true);
-    }
-    else if (cursors.right.isDown) {
-        player.setVelocityX(player.velocityX +=  speedX - dragX);
-        console.log(player.velocityX);
-        player.anims.play('right', true);
-    }
-    else{
-        if (Math.abs(player.velocityX) > dragX){
-            if (player.velocityX < 0){
-                player.setVelocityX(player.velocityX += dragX);
+    //movement on ground
+    if (player.body.touching.down){
+        if (cursors.left.isDown) {
+
+            player.setVelocityX(player.velocityX -= speedX);
+            player.anims.play('left', true);
+        }
+        else if (cursors.right.isDown) {
+            player.setVelocityX(player.velocityX +=  speedX);
+            console.log(player.velocityX);
+            player.anims.play('right', true);
+        }
+        else {
+            if (Math.abs(player.velocityX) > groundDragX){
+                if (player.velocityX < 0){
+                    player.setVelocityX(player.velocityX += groundDragX);
+                }
+                else{
+                    player.setVelocityX(player.velocityX -= groundDragX);
+                }
             }
             else{
-                player.setVelocityX(player.velocityX -= dragX);
+                player.setVelocityX(0);
             }
-        }
-        else{
-            player.setVelocityX(0);
-        }
 
-        player.anims.play('turn');
+            player.anims.play('turn');
+        }
     }
+    else{
+        if (cursors.left.isDown) {
+
+            player.setVelocityX(player.velocityX -= airspeedX);
+            player.anims.play('left', true);
+        }
+        else if (cursors.right.isDown) {
+            player.setVelocityX(player.velocityX +=  airspeedX);
+            player.anims.play('right', true);
+        }
+        else {
+            if (Math.abs(player.velocityX) > airDragX){
+                if (player.velocityX < 0){
+                    player.setVelocityX(player.velocityX += airDragX);
+                }
+                else{
+                    player.setVelocityX(player.velocityX -= airDragX);
+                }
+            }
+            else{
+                player.setVelocityX(0);
+            }
+
+            player.anims.play('turn');
+        }
+    }
+
+
+    //endregion
+
+    //TODO znaleźć dobry wzór
 
     if (cursors.up.isDown && player.body.touching.down) {
-        player.setVelocityY(-330);
+        player.setVelocityY(baseJumpVelocity  - Math.abs(player.velocityX) );
     }
 
-
-    console.log(player.collideRight);
-    if (player.collideRight || player.collideLeft)
-    {
-        player.setVelocityX(0);
+    if ((player.body.touching.left && cursors.right.isDown) || (player.body.touching.right && cursors.left.isDown)) {
+        player.setVelocityX(player.velocityX *= -1);
+    }
+    else if(player.body.touching.left || player.body.touching.right) {
+        player.setVelocityX(player.velocityX = 0);
     }
 
-    if (player.velocityX < -200){
-        player.velocityX = -200;
+    if (player.velocityX < -maxVelocityX){
+        player.velocityX = -maxVelocityX;
     }
-    else if ( player.velocityX > 200){
-        player.velocityX = 200;
+    else if ( player.velocityX > maxVelocityX){
+        player.velocityX = maxVelocityX;
     }
 
+    //this.walls.iterate(function (child){
+    //    child.tile
+    //});
 
-
+    this.wallL.tilePositionY = player.y;
+    this.wallR.tilePositionY = player.y;
+    this.wallL.y = player.y;
+    this.wallR.y = player.y;
+    this.wallL.body.y = player.y;
+    this.wallR.body.y = player.y;
+    this.tileBackground.tilePositionY = player.y;
+    this.tileBackground.y = player.y;
     this.cameras.main.centerOn(400, player.y);
+}
+function score (score, player){
+    let player_position = this.player.position.y
+    score =(450 - player_position)/170
+    return  scoreText.setText('Score: ' + 5);
+
 }
 
 </script>

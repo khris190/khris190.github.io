@@ -14,15 +14,23 @@
 
 <script type="text/javascript">
 
-var config = {
+let config = {
     type: Phaser.AUTO,
     width: 800,
     height: 600,
     physics: {
         default: 'arcade',
         arcade: {
-            gravity: { y: 300 },
-            debug: false
+            gravity: { y: 980 },
+            debug: false,
+            checkCollision: {
+                up: false,
+                down: true,
+                left: true,
+                right: true
+            },
+            fps: 60,
+            timeScale: 1
         }
     },
     scene: {
@@ -35,8 +43,8 @@ var config = {
 //region vars
 
 var player;
-var stars;
 var platforms;
+var ground;
 var wallL;
 var wallR;
 var cursors;
@@ -47,8 +55,9 @@ var groundDragX = 9;
 var airDragX = 1;
 var speedX = 6;
 var airspeedX = 2;
-var maxVelocityX = 800;
-var baseJumpVelocity = -330;
+var maxVelocityX = 600;
+var baseJumpVelocity = -600;
+var cameraVel = 0;
 
 var tileBackground;
 var game = new Phaser.Game(config);
@@ -62,35 +71,36 @@ function preload () {
     this.load.image('stand', 'assets/stand.png');
     this.load.image('ground', 'assets/ground.png');
     this.load.image('first_stand', 'assets/first_stand.png');
-    this.load.image('iced', 'assets/iced.png');
+    this.load.image('iced', 'assets/iced_stand.png');
     this.load.spritesheet('dude', 'assets/dude.png', { frameWidth: 128, frameHeight: 190 });
+
 }
 
 function create () {
     //region camera
 
     //this.cameras.main.setBounds(0, 0, 1024, 2048);
-    this.cameras.main.centerOn(400, 0);
-
+    this.cameras.main.centerOn(400, 400);
     //endregion
 
-    this.tileBackground = this.add.tileSprite(400, 400, 800, 600, 'sky');
+    this.tileBackground = this.add.tileSprite(400, 400, 800, 2000, 'sky');
     //region platforms
 
     //  The platforms group contains the ground and the 2 ledges we can jump on
     platforms = this.physics.add.staticGroup();
+    ground = this.physics.add.staticGroup();
 
     //  Here we create the ground.
     //  Scale it to fit the width of the game (the original sprite is 400x32 in size)
-    platforms.create(400, 568, 'first_stand').setScale(2).refreshBody();
+    ground.create(400, 568, 'first_stand').setScale(2).refreshBody();
 
     //endregion
 
     //region walls
 
     // create walls
-    this.wallL = this.add.tileSprite(0,400, 80, 800, 'wallL');
-    this.wallR = this.add.tileSprite(800,400, 80, 800, 'wallR');
+    this.wallL = this.add.tileSprite(0,400, 112, 2000, 'wallL');
+    this.wallR = this.add.tileSprite(800,400, 112, 2000, 'wallR');
     this.physics.add.existing(this.wallR, true);
     this.physics.add.existing(this.wallL, true);
 
@@ -102,19 +112,7 @@ function create () {
     //region platforms
 
     //  Now let's create some ledges
-    let y = 450
-    for (var i = 0; i <=100; i++){
-        let x = Math.floor(Math.random()*380)+230
-        let scale = Math.random() * (1-0.4) + 0.4;
-        stand = platforms.create(x,y,'stand').setScale(scale,1).refreshBody();
-        y = y - 170
-    }
-    for (var i = 0; i <=900; i++){
-        let x = Math.floor(Math.random()*380)+230
-        let scale = Math.random() * (1-0.4) + 0.4;
-        stand = platforms.create(x,y,'iced').setScale(scale,1).refreshBody();
-        y = y - 170
-    }
+    ledgeGen();
 
     platforms.children.iterate(function (child) {
         child.body.checkCollision.up = true;
@@ -133,12 +131,17 @@ function create () {
 
     //  Player physics properties. Give the little guy a slight bounce.
     player.setBounce(0);
-    player.setCollideWorldBounds(false);
+    player.setCollideWorldBounds(true);
 
     player.body.setSize(55,105);
 
     player.velocityX = 0;
     player.velocityY = 0;
+
+    player.body.checkCollision.up = false;
+    player.body.checkCollision.down = true;
+    player.body.checkCollision.left = true;
+    player.body.checkCollision.right = true;
 
     //  Our player animations, turning, walking left and walking right.
     this.anims.create({
@@ -168,10 +171,13 @@ function create () {
     //  The score
     scoreText = this.add.text(16, 16, 'score: 0', { fontSize: '32px', fill: '#000' });
 
+
+
+
     //region physics
 
-    //  Collide the player and the stars with the platforms
-    this.physics.add.collider(player, platforms);
+    this.physics.add.collider(player, platforms, platformDrop, null, this);
+    this.physics.add.collider(player, ground);
     this.physics.add.collider(player, this.wallR);
     this.physics.add.collider(player, this.wallL);
 
@@ -179,9 +185,9 @@ function create () {
 
 }
 
-function update ()
-{
-    if (gameOver) {
+function update () {
+    if (player.y - 400 > this.cameras.main.midPoint.y) {
+        gameOver = true;
         return;
     }
 
@@ -196,7 +202,6 @@ function update ()
         }
         else if (cursors.right.isDown) {
             player.setVelocityX(player.velocityX +=  speedX);
-            console.log(player.velocityX);
             player.anims.play('right', true);
         }
         else {
@@ -248,6 +253,10 @@ function update ()
     //TODO znaleźć dobry wzór
 
     if (cursors.up.isDown && player.body.touching.down) {
+        if (cameraVel == 0)
+        {
+            cameraVel = -0.5;
+        }
         player.setVelocityY(baseJumpVelocity  - Math.abs(player.velocityX) );
     }
 
@@ -261,30 +270,101 @@ function update ()
     if (player.velocityX < -maxVelocityX){
         player.velocityX = -maxVelocityX;
     }
-    else if ( player.velocityX > maxVelocityX){
+    else if ( player.velocityX > maxVelocityX) {
         player.velocityX = maxVelocityX;
     }
 
-    //this.walls.iterate(function (child){
-    //    child.tile
-    //});
+    scoreCount();
+
+    platforms.children.iterate(function (child){
+        if (child) {
+            if (child.shaked) {
+                if (child.shakedelayed < child.shakedelay) {
+                    child.shakedelayed++;
+                } else {
+                    child.shakeinc += 0.02;
+                    child.setAngle(child.shake);
+                    if (child.shake > 7 || child.shake < -7) {
+                        child.shakedir *= -1;
+                    }
+                    child.shake += child.shakeinc * child.shakedir;
+                    if (child.shakeinc > 7) {
+                        child.destroy();
+                    }
+                }
+            }
+        }
+    });
+
+
+    //region y pos change
+
+    scoreText.y = this.cameras.main.midPoint.y - 300
 
     this.wallL.tilePositionY = player.y;
     this.wallR.tilePositionY = player.y;
+
     this.wallL.y = player.y;
     this.wallR.y = player.y;
+
     this.wallL.body.y = player.y;
     this.wallR.body.y = player.y;
+
     this.tileBackground.tilePositionY = player.y;
     this.tileBackground.y = player.y;
-    this.cameras.main.centerOn(400, player.y);
-}
-function score (score, player){
-    let player_position = this.player.position.y
-    score =(450 - player_position)/170
-    return  scoreText.setText('Score: ' + 5);
+
+    if (player.y < this.cameras.main.midPoint.y - 150){
+        this.cameras.main.midPoint.y = player.y + 150;
+    }
+    this.cameras.main.centerOn(400, this.cameras.main.midPoint.y + cameraVel);
+
+    //endregion
 
 }
+
+function scoreCount (){
+    let temp = parseInt((450 - player.y)/170);
+    if (this.score < temp){
+        this.score = temp;
+        scoreText.setText('Score: ' + this.score);
+    }
+}
+
+function ledgeGen(){
+    let y = 390;
+    for (let i = 0; i <=100; i++){
+        let x = Math.floor(Math.random()*380)+230;
+        let scale = Math.random() * (1-0.4) + 0.4;
+        stand = platforms.create(x,y,'stand').setScale(scale,1).refreshBody();
+        stand.shaked = false;
+        y = y - 170;
+    }
+    for (let i = 100; i <=1000; i++){
+        let x = Math.floor(Math.random()*380)+230;
+        let scale = Math.random() * (1-0.4) + 0.4;
+        stand = platforms.create(x,y,'iced').setScale(scale,1).refreshBody();
+        stand.shaked = false;
+        y = y - 170;
+    }
+}
+
+function platformDrop(player, platform){
+    if (!platform.shaked){
+        platform.shakedelay = 150;
+        platform.shakedelayed = 0;
+        platform.shake = 0;
+        platform.shakeinc = 0;
+        platform.shakedir = 1;
+        platform.shaked = true;
+    }
+}
+function wiggle(aProgress, aPeriod1, aPeriod2) {
+    var current1 = aProgress * Math.PI * 2 * aPeriod1;
+    var current2 = aProgress * (Math.PI * 2 * aPeriod2 + Math.PI / 2);
+
+    return Math.sin(current1) * Math.cos(current2);
+}
+
 
 </script>
 
